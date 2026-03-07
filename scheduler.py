@@ -694,6 +694,7 @@ class Scheduler:
             head_dim=self.config.head_dim,
             page_size=self.page_size,
             pos_encoding_mode="NONE",
+            q_data_type=self.dtype,
             data_type=self.dtype,
         )
 
