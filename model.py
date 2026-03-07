@@ -47,6 +47,7 @@ class Qwen2Config:
     rope_theta: float = 1_000_000.0
     max_position_embeddings: int = 32768
     tie_word_embeddings: bool = True
+    attn_bias: bool = True  # Qwen uses bias, Mistral doesn't
 
     @classmethod
     def from_pretrained(cls, model_path: str) -> "Qwen2Config":
@@ -66,6 +67,7 @@ class Qwen2Config:
             rope_theta=raw.get("rope_theta", 1_000_000.0),
             max_position_embeddings=raw.get("max_position_embeddings", 32768),
             tie_word_embeddings=raw.get("tie_word_embeddings", True),
+            attn_bias=raw.get("attention_bias", raw.get("model_type", "") != "mistral"),
         )
 
 
@@ -135,13 +137,13 @@ class Attention(nn.Module):
         self.needs_head_padding = self.padded_num_heads != self.num_heads
 
         self.q_proj = nn.Linear(
-            config.hidden_size, self.num_heads * self.head_dim, bias=True
+            config.hidden_size, self.num_heads * self.head_dim, bias=config.attn_bias
         )
         self.k_proj = nn.Linear(
-            config.hidden_size, self.num_kv_heads * self.head_dim, bias=True
+            config.hidden_size, self.num_kv_heads * self.head_dim, bias=config.attn_bias
         )
         self.v_proj = nn.Linear(
-            config.hidden_size, self.num_kv_heads * self.head_dim, bias=True
+            config.hidden_size, self.num_kv_heads * self.head_dim, bias=config.attn_bias
         )
         self.o_proj = nn.Linear(
             self.num_heads * self.head_dim, config.hidden_size, bias=False
