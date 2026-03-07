@@ -517,6 +517,7 @@ class Scheduler:
             page_size=self.page_size,
             causal=True,
             pos_encoding_mode="NONE",
+            q_data_type=self.dtype,
         )
 
         # batch_indices: all tokens belong to request 0; positions: 0..prompt_len-1
