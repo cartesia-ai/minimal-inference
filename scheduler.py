@@ -314,6 +314,33 @@ def sample(logits: torch.Tensor, temperature: float) -> int:
     return torch.multinomial(probs, num_samples=1).item()
 
 
+def sample_batch(logits: torch.Tensor, temperatures: list[float]) -> list[int]:
+    """Sample from logits [B, 1, vocab_size] for a batch of requests.
+
+    Single GPU sync instead of one per request.
+    """
+    last_logits = logits[:, -1, :]  # [B, vocab_size]
+
+    # Build temperature tensor; 0 means greedy
+    temps = torch.tensor(temperatures, dtype=logits.dtype, device=logits.device)
+    greedy_mask = temps <= 0
+
+    # Scale by temperature (avoid div-by-zero for greedy)
+    temps = temps.clamp(min=1e-6).unsqueeze(1)  # [B, 1]
+    scaled = last_logits / temps
+    probs = F.softmax(scaled, dim=-1, dtype=torch.float32)
+
+    # Sample all at once
+    sampled = torch.multinomial(probs, num_samples=1).squeeze(1)  # [B]
+
+    # Override with argmax for greedy requests
+    if greedy_mask.any():
+        greedy_tokens = last_logits.argmax(dim=-1)
+        sampled[greedy_mask] = greedy_tokens[greedy_mask]
+
+    return sampled.tolist()  # single GPU->CPU sync
+
+
 # ---------------------------------------------------------------------------
 # Scheduler
 # ---------------------------------------------------------------------------
@@ -639,14 +666,15 @@ class Scheduler:
         # Write back new KV entries to master cache
         self.kv_cache.write_back_decode(slots, positions, trimmed_caches)
 
-        # Sample per-request and distribute
-        for i, req in enumerate(decoding):
-            token_logits = logits[i : i + 1, :, :]
-            next_token = sample(token_logits, req.temperature)
+        # Batched sampling: single GPU->CPU sync for all requests
+        temperatures = [r.temperature for r in decoding]
+        next_tokens = sample_batch(logits, temperatures)
 
+        now = time.perf_counter()
+        for i, (req, next_token) in enumerate(zip(decoding, next_tokens)):
             req.generated_tokens.append(next_token)
             req.current_position += 1
-            req.last_token_time = time.perf_counter()
+            req.last_token_time = now
 
             self._push_token(req, next_token)
 
@@ -740,14 +768,15 @@ class Scheduler:
 
         # No write-back needed — KV written directly into paged cache
 
-        # Sample per-request and distribute
-        for i, req in enumerate(decoding):
-            token_logits = logits[i : i + 1, :, :]
-            next_token = sample(token_logits, req.temperature)
+        # Batched sampling: single GPU->CPU sync for all requests
+        temperatures = [r.temperature for r in decoding]
+        next_tokens = sample_batch(logits, temperatures)
 
+        now = time.perf_counter()
+        for i, (req, next_token) in enumerate(zip(decoding, next_tokens)):
             req.generated_tokens.append(next_token)
             req.current_position += 1
-            req.last_token_time = time.perf_counter()
+            req.last_token_time = now
 
             self._push_token(req, next_token)
 
