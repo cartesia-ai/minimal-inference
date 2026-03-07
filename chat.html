@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>minimal-inference</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f0f0f;
+    color: #e0e0e0;
+    height: 100vh;
+    display: flex;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 280px;
+    background: #1a1a1a;
+    border-right: 1px solid #2a2a2a;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    flex-shrink: 0;
+  }
+
+  .sidebar h2 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .param-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .param-group label {
+    font-size: 13px;
+    color: #aaa;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .param-group label span {
+    color: #6cf;
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 12px;
+  }
+
+  .param-group input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    outline: none;
+  }
+
+  .param-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: #6cf;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+
+  .param-group input[type="text"],
+  .param-group input[type="number"] {
+    background: #252525;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: #e0e0e0;
+    font-size: 13px;
+    font-family: 'SF Mono', Monaco, monospace;
+    outline: none;
+  }
+
+  .param-group input:focus {
+    border-color: #6cf;
+  }
+
+  .param-group textarea {
+    background: #252525;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: #e0e0e0;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    resize: vertical;
+    min-height: 60px;
+  }
+
+  .param-group textarea:focus {
+    border-color: #6cf;
+  }
+
+  .btn-clear {
+    margin-top: auto;
+    background: #2a2a2a;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 10px;
+    color: #e0e0e0;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .btn-clear:hover {
+    background: #333;
+  }
+
+  /* Main chat area */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .header {
+    padding: 16px 24px;
+    border-bottom: 1px solid #2a2a2a;
+    font-size: 15px;
+    font-weight: 600;
+    color: #ccc;
+    background: #1a1a1a;
+  }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .message {
+    max-width: 720px;
+    line-height: 1.6;
+    font-size: 14px;
+  }
+
+  .message.user {
+    align-self: flex-end;
+    background: #1e3a5f;
+    border-radius: 16px 16px 4px 16px;
+    padding: 12px 16px;
+  }
+
+  .message.assistant {
+    align-self: flex-start;
+    background: #1e1e1e;
+    border-radius: 16px 16px 16px 4px;
+    padding: 12px 16px;
+    border: 1px solid #2a2a2a;
+  }
+
+  .message.assistant .content {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .message.assistant .content code {
+    background: #2a2a2a;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 13px;
+  }
+
+  .message.assistant .content pre {
+    background: #151515;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    padding: 12px;
+    margin: 8px 0;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  .message.assistant .content pre code {
+    background: none;
+    padding: 0;
+  }
+
+  .message .role-tag {
+    font-size: 11px;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+
+  .message.user .role-tag { color: #6cf; }
+  .message.assistant .role-tag { color: #8b8; }
+
+  .cursor {
+    display: inline-block;
+    width: 7px;
+    height: 15px;
+    background: #6cf;
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    animation: blink 0.8s step-end infinite;
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  /* Input area */
+  .input-area {
+    padding: 16px 24px;
+    border-top: 1px solid #2a2a2a;
+    background: #1a1a1a;
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+  }
+
+  .input-area textarea {
+    flex: 1;
+    background: #252525;
+    border: 1px solid #333;
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: #e0e0e0;
+    font-size: 14px;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+    max-height: 150px;
+    line-height: 1.5;
+  }
+
+  .input-area textarea:focus {
+    border-color: #6cf;
+  }
+
+  .btn-send {
+    background: #6cf;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 20px;
+    color: #000;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn-send:hover { opacity: 0.85; }
+  .btn-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Scrollbar */
+  .messages::-webkit-scrollbar { width: 6px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+  .empty-state {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #444;
+    font-size: 15px;
+  }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <h2>Settings</h2>
+
+  <div class="param-group">
+    <label>API URL</label>
+    <input type="text" id="api-url" value="http://localhost:8000">
+  </div>
+
+  <div class="param-group">
+    <label>Temperature <span id="temp-val">0.7</span></label>
+    <input type="range" id="temperature" min="0" max="2" step="0.05" value="0.7">
+  </div>
+
+  <div class="param-group">
+    <label>Max Tokens</label>
+    <input type="number" id="max-tokens" value="512" min="1" max="65536">
+  </div>
+
+  <div class="param-group">
+    <label>System Prompt</label>
+    <textarea id="system-prompt" placeholder="Optional system prompt..."></textarea>
+  </div>
+
+  <button class="btn-clear" onclick="clearConversation()">Clear Conversation</button>
+</div>
+
+<div class="main">
+  <div class="header">minimal-inference</div>
+  <div class="messages" id="messages">
+    <div class="empty-state" id="empty-state">Send a message to start</div>
+  </div>
+  <div class="input-area">
+    <textarea id="input" rows="1" placeholder="Message... (Enter to send, Shift+Enter for newline)" autofocus></textarea>
+    <button class="btn-send" id="send-btn" onclick="sendMessage()">Send</button>
+  </div>
+</div>
+
+<script>
+let conversationHistory = [];
+let isGenerating = false;
+let abortController = null;
+
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('send-btn');
+const messagesDiv = document.getElementById('messages');
+const emptyState = document.getElementById('empty-state');
+const tempSlider = document.getElementById('temperature');
+const tempVal = document.getElementById('temp-val');
+
+// Auto-resize textarea
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 150) + 'px';
+});
+
+// Enter to send, Shift+Enter for newline
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+// Temperature slider display
+tempSlider.addEventListener('input', () => {
+  tempVal.textContent = parseFloat(tempSlider.value).toFixed(2);
+});
+
+function clearConversation() {
+  conversationHistory = [];
+  messagesDiv.innerHTML = '<div class="empty-state" id="empty-state">Send a message to start</div>';
+  if (abortController) {
+    abortController.abort();
+    abortController = null;
+  }
+  isGenerating = false;
+  sendBtn.disabled = false;
+  sendBtn.textContent = 'Send';
+}
+
+function addMessage(role, content) {
+  const empty = document.getElementById('empty-state');
+  if (empty) empty.remove();
+
+  const div = document.createElement('div');
+  div.className = `message ${role}`;
+  div.innerHTML = `<div class="role-tag">${role}</div><div class="content"></div>`;
+  messagesDiv.appendChild(div);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+  const contentDiv = div.querySelector('.content');
+  if (content) contentDiv.innerHTML = renderContent(content);
+  return contentDiv;
+}
+
+function renderContent(text) {
+  // Simple rendering: code blocks, inline code, escape HTML
+  let html = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Code blocks: ```...```
+  html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+  // Inline code: `...`
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  return html;
+}
+
+async function sendMessage() {
+  const text = input.value.trim();
+  if (!text || isGenerating) return;
+
+  isGenerating = true;
+  sendBtn.disabled = true;
+  sendBtn.textContent = 'Stop';
+  sendBtn.onclick = stopGeneration;
+
+  // Add user message
+  addMessage('user', text);
+  conversationHistory.push({ role: 'user', content: text });
+  input.value = '';
+  input.style.height = 'auto';
+
+  // Build messages array
+  const messages = [];
+  const systemPrompt = document.getElementById('system-prompt').value.trim();
+  if (systemPrompt) {
+    messages.push({ role: 'system', content: systemPrompt });
+  }
+  messages.push(...conversationHistory);
+
+  // Create assistant message bubble with cursor
+  const contentDiv = addMessage('assistant', '');
+  contentDiv.innerHTML = '<span class="cursor"></span>';
+
+  const apiUrl = document.getElementById('api-url').value.trim();
+  const temperature = parseFloat(tempSlider.value);
+  const maxTokens = parseInt(document.getElementById('max-tokens').value) || 512;
+
+  abortController = new AbortController();
+  let fullText = '';
+
+  try {
+    const res = await fetch(`${apiUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+        stream: true,
+      }),
+      signal: abortController.signal,
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete line
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const data = trimmed.slice(6);
+        if (data === '[DONE]') continue;
+
+        try {
+          const chunk = JSON.parse(data);
+          const delta = chunk.choices?.[0]?.delta;
+          if (delta?.content) {
+            fullText += delta.content;
+            contentDiv.innerHTML = renderContent(fullText) + '<span class="cursor"></span>';
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+          }
+        } catch (e) {
+          // skip unparseable chunks
+        }
+      }
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      fullText += fullText ? '\n\n[Error: ' + e.message + ']' : '[Error: ' + e.message + ']';
+    }
+  }
+
+  // Remove cursor, finalize
+  contentDiv.innerHTML = renderContent(fullText || '[empty response]');
+  if (fullText) {
+    conversationHistory.push({ role: 'assistant', content: fullText });
+  }
+
+  isGenerating = false;
+  abortController = null;
+  sendBtn.disabled = false;
+  sendBtn.textContent = 'Send';
+  sendBtn.onclick = sendMessage;
+}
+
+function stopGeneration() {
+  if (abortController) {
+    abortController.abort();
+  }
+}
+</script>
+
+</body>
+</html>
