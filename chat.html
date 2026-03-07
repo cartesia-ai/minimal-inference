@@ -20,30 +20,122 @@
     width: 280px;
     background: #1a1a1a;
     border-right: 1px solid #2a2a2a;
-    padding: 24px 20px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
     flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .sidebar-section {
+    padding: 16px 16px 0;
   }
 
   .sidebar h2 {
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 600;
-    color: #888;
+    color: #666;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    margin-bottom: 10px;
   }
+
+  /* Conversation list */
+  .conv-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 8px;
+    min-height: 0;
+  }
+
+  .conv-list::-webkit-scrollbar { width: 4px; }
+  .conv-list::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+  .conv-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #aaa;
+    transition: background 0.1s;
+    gap: 8px;
+  }
+
+  .conv-item:hover { background: #252525; }
+  .conv-item.active { background: #2a2a2a; color: #e0e0e0; }
+
+  .conv-item .conv-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .conv-item .conv-delete {
+    display: none;
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 4px;
+  }
+
+  .conv-item:hover .conv-delete { display: block; }
+  .conv-item .conv-delete:hover { color: #f66; }
+
+  .btn-new-chat {
+    margin: 8px;
+    background: #6cf;
+    border: none;
+    border-radius: 6px;
+    padding: 9px;
+    color: #000;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  .btn-new-chat:hover { opacity: 0.85; }
+
+  /* Settings panel */
+  .settings-panel {
+    border-top: 1px solid #2a2a2a;
+    padding: 12px 16px;
+  }
+
+  .settings-toggle {
+    font-size: 12px;
+    color: #666;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    user-select: none;
+  }
+
+  .settings-toggle:hover { color: #aaa; }
+
+  .settings-body {
+    display: none;
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .settings-body.collapsed { display: none; }
 
   .param-group {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
   }
 
   .param-group label {
-    font-size: 13px;
-    color: #aaa;
+    font-size: 12px;
+    color: #888;
     display: flex;
     justify-content: space-between;
   }
@@ -51,13 +143,13 @@
   .param-group label span {
     color: #6cf;
     font-family: 'SF Mono', Monaco, monospace;
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .param-group input[type="range"] {
     -webkit-appearance: none;
     width: 100%;
-    height: 4px;
+    height: 3px;
     background: #333;
     border-radius: 2px;
     outline: none;
@@ -65,8 +157,8 @@
 
   .param-group input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     background: #6cf;
     border-radius: 50%;
     cursor: pointer;
@@ -74,52 +166,32 @@
 
   .param-group input[type="text"],
   .param-group input[type="number"] {
-    background: #252525;
+    background: #222;
     border: 1px solid #333;
-    border-radius: 6px;
-    padding: 8px 10px;
+    border-radius: 5px;
+    padding: 6px 8px;
     color: #e0e0e0;
-    font-size: 13px;
+    font-size: 12px;
     font-family: 'SF Mono', Monaco, monospace;
     outline: none;
   }
 
-  .param-group input:focus {
-    border-color: #6cf;
-  }
+  .param-group input:focus { border-color: #6cf; }
 
   .param-group textarea {
-    background: #252525;
+    background: #222;
     border: 1px solid #333;
-    border-radius: 6px;
-    padding: 8px 10px;
+    border-radius: 5px;
+    padding: 6px 8px;
     color: #e0e0e0;
-    font-size: 13px;
+    font-size: 12px;
     font-family: inherit;
     outline: none;
     resize: vertical;
-    min-height: 60px;
+    min-height: 48px;
   }
 
-  .param-group textarea:focus {
-    border-color: #6cf;
-  }
-
-  .btn-clear {
-    margin-top: auto;
-    background: #2a2a2a;
-    border: 1px solid #333;
-    border-radius: 6px;
-    padding: 10px;
-    color: #e0e0e0;
-    font-size: 13px;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-
-  .btn-clear:hover {
-    background: #333;
-  }
+  .param-group textarea:focus { border-color: #6cf; }
 
   /* Main chat area */
   .main {
@@ -129,51 +201,49 @@
     min-width: 0;
   }
 
-  .header {
-    padding: 16px 24px;
-    border-bottom: 1px solid #2a2a2a;
-    font-size: 15px;
-    font-weight: 600;
-    color: #ccc;
-    background: #1a1a1a;
-  }
-
   .messages {
     flex: 1;
     overflow-y: auto;
     padding: 24px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 4px;
   }
 
-  .message {
+  .msg-wrap {
     max-width: 720px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .msg-wrap.user { align-self: flex-end; }
+  .msg-wrap.assistant { align-self: flex-start; }
+
+  .message {
     line-height: 1.6;
     font-size: 14px;
+    position: relative;
   }
 
   .message.user {
-    align-self: flex-end;
     background: #1e3a5f;
     border-radius: 16px 16px 4px 16px;
     padding: 12px 16px;
   }
 
   .message.assistant {
-    align-self: flex-start;
     background: #1e1e1e;
     border-radius: 16px 16px 16px 4px;
     padding: 12px 16px;
     border: 1px solid #2a2a2a;
   }
 
-  .message.assistant .content {
+  .message .content {
     white-space: pre-wrap;
     word-break: break-word;
   }
 
-  .message.assistant .content code {
+  .message .content code {
     background: #2a2a2a;
     padding: 1px 5px;
     border-radius: 3px;
@@ -181,7 +251,7 @@
     font-size: 13px;
   }
 
-  .message.assistant .content pre {
+  .message .content pre {
     background: #151515;
     border: 1px solid #2a2a2a;
     border-radius: 6px;
@@ -191,10 +261,7 @@
     white-space: pre;
   }
 
-  .message.assistant .content pre code {
-    background: none;
-    padding: 0;
-  }
+  .message .content pre code { background: none; padding: 0; }
 
   .message .role-tag {
     font-size: 11px;
@@ -208,6 +275,65 @@
   .message.user .role-tag { color: #6cf; }
   .message.assistant .role-tag { color: #8b8; }
 
+  .msg-actions {
+    display: none;
+    gap: 2px;
+    padding: 2px 4px;
+  }
+
+  .msg-wrap.user .msg-actions { justify-content: flex-end; }
+  .msg-wrap.assistant .msg-actions { justify-content: flex-start; }
+  .msg-wrap:hover .msg-actions { display: flex; }
+
+  .msg-action-btn {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 3px 8px;
+    color: #666;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .msg-action-btn:hover {
+    color: #ccc;
+    background: #2a2a2a;
+    border-color: #333;
+  }
+
+  .edit-area {
+    background: #252525;
+    border: 1px solid #6cf;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #e0e0e0;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+    width: 100%;
+    min-height: 60px;
+    line-height: 1.5;
+  }
+
+  .edit-buttons {
+    display: flex;
+    gap: 8px;
+    padding: 6px 0;
+  }
+
+  .edit-buttons button {
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid #333;
+  }
+
+  .edit-save { background: #6cf; color: #000; font-weight: 600; border-color: #6cf !important; }
+  .edit-cancel { background: #2a2a2a; color: #ccc; }
+
   .cursor {
     display: inline-block;
     width: 7px;
@@ -218,11 +344,8 @@
     animation: blink 0.8s step-end infinite;
   }
 
-  @keyframes blink {
-    50% { opacity: 0; }
-  }
+  @keyframes blink { 50% { opacity: 0; } }
 
-  /* Input area */
   .input-area {
     padding: 16px 24px;
     border-top: 1px solid #2a2a2a;
@@ -247,9 +370,7 @@
     line-height: 1.5;
   }
 
-  .input-area textarea:focus {
-    border-color: #6cf;
-  }
+  .input-area textarea:focus { border-color: #6cf; }
 
   .btn-send {
     background: #6cf;
@@ -267,7 +388,6 @@
   .btn-send:hover { opacity: 0.85; }
   .btn-send:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  /* Scrollbar */
   .messages::-webkit-scrollbar { width: 6px; }
   .messages::-webkit-scrollbar-track { background: transparent; }
   .messages::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
@@ -285,33 +405,36 @@
 <body>
 
 <div class="sidebar">
-  <h2>Settings</h2>
-
-  <div class="param-group">
-    <label>API URL</label>
-    <input type="text" id="api-url" value="http://localhost:8000">
+  <div class="sidebar-section">
+    <button class="btn-new-chat" onclick="newConversation()">+ New Chat</button>
   </div>
 
-  <div class="param-group">
-    <label>Temperature <span id="temp-val">0.7</span></label>
-    <input type="range" id="temperature" min="0" max="2" step="0.05" value="0.7">
-  </div>
+  <div class="conv-list" id="conv-list"></div>
 
-  <div class="param-group">
-    <label>Max Tokens</label>
-    <input type="number" id="max-tokens" value="512" min="1" max="65536">
+  <div class="settings-panel">
+    <div class="settings-toggle" onclick="toggleSettings()">Settings</div>
+    <div class="settings-body" id="settings-body">
+      <div class="param-group">
+        <label>API URL</label>
+        <input type="text" id="api-url" value="http://localhost:8000">
+      </div>
+      <div class="param-group">
+        <label>Temperature <span id="temp-val">0.7</span></label>
+        <input type="range" id="temperature" min="0" max="2" step="0.05" value="0.7">
+      </div>
+      <div class="param-group">
+        <label>Max Tokens</label>
+        <input type="number" id="max-tokens" value="512" min="1" max="65536">
+      </div>
+      <div class="param-group">
+        <label>System Prompt</label>
+        <textarea id="system-prompt" placeholder="Optional..."></textarea>
+      </div>
+    </div>
   </div>
-
-  <div class="param-group">
-    <label>System Prompt</label>
-    <textarea id="system-prompt" placeholder="Optional system prompt..."></textarea>
-  </div>
-
-  <button class="btn-clear" onclick="clearConversation()">Clear Conversation</button>
 </div>
 
 <div class="main">
-  <div class="header">minimal-inference</div>
   <div class="messages" id="messages">
     <div class="empty-state" id="empty-state">Send a message to start</div>
   </div>
@@ -322,128 +445,326 @@
 </div>
 
 <script>
-let conversationHistory = [];
+const STORAGE_KEY = 'minimal-inference-conversations';
+
+// State
+let conversations = {}; // id -> { id, title, messages: [{role, content}], created }
+let activeConvId = null;
 let isGenerating = false;
 let abortController = null;
 
-const input = document.getElementById('input');
+const inputEl = document.getElementById('input');
 const sendBtn = document.getElementById('send-btn');
 const messagesDiv = document.getElementById('messages');
-const emptyState = document.getElementById('empty-state');
+const convListEl = document.getElementById('conv-list');
 const tempSlider = document.getElementById('temperature');
 const tempVal = document.getElementById('temp-val');
 
-// Auto-resize textarea
-input.addEventListener('input', () => {
-  input.style.height = 'auto';
-  input.style.height = Math.min(input.scrollHeight, 150) + 'px';
-});
+// ---- Persistence ----
 
-// Enter to send, Shift+Enter for newline
-input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
-});
-
-// Temperature slider display
-tempSlider.addEventListener('input', () => {
-  tempVal.textContent = parseFloat(tempSlider.value).toFixed(2);
-});
-
-function clearConversation() {
-  conversationHistory = [];
-  messagesDiv.innerHTML = '<div class="empty-state" id="empty-state">Send a message to start</div>';
-  if (abortController) {
-    abortController.abort();
-    abortController = null;
-  }
-  isGenerating = false;
-  sendBtn.disabled = false;
-  sendBtn.textContent = 'Send';
+function saveAll() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ conversations, activeConvId }));
 }
 
-function addMessage(role, content) {
-  const empty = document.getElementById('empty-state');
-  if (empty) empty.remove();
+function loadAll() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (raw && raw.conversations) {
+      conversations = raw.conversations;
+      activeConvId = raw.activeConvId;
+    }
+  } catch (e) { /* fresh start */ }
+}
 
-  const div = document.createElement('div');
-  div.className = `message ${role}`;
-  div.innerHTML = `<div class="role-tag">${role}</div><div class="content"></div>`;
-  messagesDiv.appendChild(div);
-  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+// ---- Conversation management ----
 
-  const contentDiv = div.querySelector('.content');
-  if (content) contentDiv.innerHTML = renderContent(content);
-  return contentDiv;
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+function getActiveMessages() {
+  if (!activeConvId || !conversations[activeConvId]) return [];
+  return conversations[activeConvId].messages;
+}
+
+function setActiveMessages(msgs) {
+  if (!activeConvId || !conversations[activeConvId]) return;
+  conversations[activeConvId].messages = msgs;
+  saveAll();
+}
+
+function deriveTitle(messages) {
+  const first = messages.find(m => m.role === 'user');
+  if (!first) return 'New Chat';
+  return first.content.slice(0, 40) + (first.content.length > 40 ? '...' : '');
+}
+
+function newConversation() {
+  if (isGenerating) return;
+  const id = genId();
+  conversations[id] = { id, title: 'New Chat', messages: [], created: Date.now() };
+  activeConvId = id;
+  saveAll();
+  renderConvList();
+  renderChat();
+}
+
+function switchConversation(id) {
+  if (isGenerating) return;
+  if (id === activeConvId) return;
+  activeConvId = id;
+  saveAll();
+  renderConvList();
+  renderChat();
+}
+
+function deleteConversation(id, e) {
+  e.stopPropagation();
+  if (isGenerating) return;
+  delete conversations[id];
+  if (activeConvId === id) {
+    const ids = Object.keys(conversations).sort((a, b) =>
+      (conversations[b].created || 0) - (conversations[a].created || 0)
+    );
+    activeConvId = ids[0] || null;
+  }
+  saveAll();
+  renderConvList();
+  renderChat();
+}
+
+function renderConvList() {
+  const sorted = Object.values(conversations).sort((a, b) => (b.created || 0) - (a.created || 0));
+  convListEl.innerHTML = sorted.map(c => `
+    <div class="conv-item ${c.id === activeConvId ? 'active' : ''}" onclick="switchConversation('${c.id}')">
+      <span class="conv-title">${escapeHtml(c.title)}</span>
+      <button class="conv-delete" onclick="deleteConversation('${c.id}', event)">&times;</button>
+    </div>
+  `).join('');
+}
+
+// ---- Rendering ----
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function renderContent(text) {
-  // Simple rendering: code blocks, inline code, escape HTML
-  let html = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  // Code blocks: ```...```
+  let html = escapeHtml(text);
   html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
-  // Inline code: `...`
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
   return html;
 }
 
-async function sendMessage() {
-  const text = input.value.trim();
-  if (!text || isGenerating) return;
+function renderChat() {
+  const msgs = getActiveMessages();
+  messagesDiv.innerHTML = '';
+  if (msgs.length === 0) {
+    messagesDiv.innerHTML = '<div class="empty-state">Send a message to start</div>';
+    return;
+  }
+  for (let i = 0; i < msgs.length; i++) {
+    messagesDiv.appendChild(createMsgWrap(msgs[i].role, msgs[i].content, i));
+  }
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
 
+function createMsgWrap(role, content, index) {
+  const wrap = document.createElement('div');
+  wrap.className = `msg-wrap ${role}`;
+
+  const msgDiv = document.createElement('div');
+  msgDiv.className = `message ${role}`;
+  msgDiv.innerHTML = `<div class="role-tag">${role}</div><div class="content">${content ? renderContent(content) : ''}</div>`;
+
+  const actions = document.createElement('div');
+  actions.className = 'msg-actions';
+
+  if (role === 'user') {
+    actions.innerHTML = `
+      <button class="msg-action-btn" onclick="editMessage(${index})">Edit</button>
+      <button class="msg-action-btn" onclick="deleteFromHere(${index})">Delete</button>
+    `;
+  } else {
+    actions.innerHTML = `
+      <button class="msg-action-btn" onclick="regenerate(${index})">Regenerate</button>
+      <button class="msg-action-btn" onclick="deleteFromHere(${index})">Delete</button>
+      <button class="msg-action-btn" onclick="copyMessage(${index})">Copy</button>
+    `;
+  }
+
+  wrap.appendChild(msgDiv);
+  wrap.appendChild(actions);
+  return wrap;
+}
+
+// ---- Settings ----
+
+function toggleSettings() {
+  document.getElementById('settings-body').classList.toggle('collapsed');
+}
+
+function getSettings() {
+  return {
+    apiUrl: document.getElementById('api-url').value.trim(),
+    temperature: parseFloat(tempSlider.value),
+    maxTokens: parseInt(document.getElementById('max-tokens').value) || 512,
+    systemPrompt: document.getElementById('system-prompt').value.trim(),
+  };
+}
+
+function buildApiMessages(upToIndex) {
+  const s = getSettings();
+  const msgs = [];
+  if (s.systemPrompt) msgs.push({ role: 'system', content: s.systemPrompt });
+  const all = getActiveMessages();
+  const end = upToIndex !== undefined ? upToIndex + 1 : all.length;
+  for (let i = 0; i < end; i++) msgs.push({ ...all[i] });
+  return msgs;
+}
+
+// ---- Message actions ----
+
+function editMessage(index) {
+  if (isGenerating) return;
+  const msgs = getActiveMessages();
+  const wraps = messagesDiv.querySelectorAll('.msg-wrap');
+  const wrap = wraps[index];
+  if (!wrap) return;
+
+  const msgDiv = wrap.querySelector('.message');
+  const actionsDiv = wrap.querySelector('.msg-actions');
+  actionsDiv.style.display = 'none';
+  const origHTML = msgDiv.innerHTML;
+
+  msgDiv.innerHTML = '';
+  const textarea = document.createElement('textarea');
+  textarea.className = 'edit-area';
+  textarea.value = msgs[index].content;
+  msgDiv.appendChild(textarea);
+
+  const btns = document.createElement('div');
+  btns.className = 'edit-buttons';
+  btns.innerHTML = '<button class="edit-save">Save & Submit</button><button class="edit-cancel">Cancel</button>';
+  msgDiv.appendChild(btns);
+
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+  btns.querySelector('.edit-cancel').onclick = () => {
+    msgDiv.innerHTML = origHTML;
+    actionsDiv.style.display = '';
+  };
+
+  btns.querySelector('.edit-save').onclick = () => {
+    const newText = textarea.value.trim();
+    if (!newText) return;
+    msgs[index].content = newText;
+    const truncated = msgs.slice(0, index + 1);
+    setActiveMessages(truncated);
+    updateTitle();
+    renderChat();
+    generateAssistantResponse(index);
+  };
+
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      btns.querySelector('.edit-save').click();
+    }
+  });
+}
+
+function deleteFromHere(index) {
+  if (isGenerating) return;
+  setActiveMessages(getActiveMessages().slice(0, index));
+  updateTitle();
+  renderChat();
+}
+
+function regenerate(index) {
+  if (isGenerating) return;
+  const msgs = getActiveMessages();
+  const truncated = msgs.slice(0, index);
+  setActiveMessages(truncated);
+  renderChat();
+  const lastUserIdx = truncated.length - 1;
+  if (lastUserIdx >= 0 && truncated[lastUserIdx].role === 'user') {
+    generateAssistantResponse(lastUserIdx);
+  }
+}
+
+function copyMessage(index) {
+  const msgs = getActiveMessages();
+  if (msgs[index]) navigator.clipboard.writeText(msgs[index].content).catch(() => {});
+}
+
+function updateTitle() {
+  if (!activeConvId || !conversations[activeConvId]) return;
+  conversations[activeConvId].title = deriveTitle(getActiveMessages());
+  saveAll();
+  renderConvList();
+}
+
+// ---- Send / stream ----
+
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text || isGenerating) return;
+  if (!activeConvId) newConversation();
+
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+
+  const msgs = getActiveMessages();
+  msgs.push({ role: 'user', content: text });
+  setActiveMessages(msgs);
+  updateTitle();
+  renderChat();
+
+  await generateAssistantResponse(msgs.length - 1);
+}
+
+async function generateAssistantResponse(afterUserIndex) {
+  if (isGenerating) return;
   isGenerating = true;
   sendBtn.disabled = true;
   sendBtn.textContent = 'Stop';
   sendBtn.onclick = stopGeneration;
 
-  // Add user message
-  addMessage('user', text);
-  conversationHistory.push({ role: 'user', content: text });
-  input.value = '';
-  input.style.height = 'auto';
+  const msgs = getActiveMessages();
+  msgs.push({ role: 'assistant', content: '' });
+  setActiveMessages(msgs);
 
-  // Build messages array
-  const messages = [];
-  const systemPrompt = document.getElementById('system-prompt').value.trim();
-  if (systemPrompt) {
-    messages.push({ role: 'system', content: systemPrompt });
-  }
-  messages.push(...conversationHistory);
-
-  // Create assistant message bubble with cursor
-  const contentDiv = addMessage('assistant', '');
+  // Append streaming bubble
+  const wrap = createMsgWrap('assistant', '', msgs.length - 1);
+  const emptyEl = messagesDiv.querySelector('.empty-state');
+  if (emptyEl) emptyEl.remove();
+  messagesDiv.appendChild(wrap);
+  const contentDiv = wrap.querySelector('.content');
   contentDiv.innerHTML = '<span class="cursor"></span>';
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
-  const apiUrl = document.getElementById('api-url').value.trim();
-  const temperature = parseFloat(tempSlider.value);
-  const maxTokens = parseInt(document.getElementById('max-tokens').value) || 512;
+  const s = getSettings();
+  const apiMessages = buildApiMessages(afterUserIndex);
 
   abortController = new AbortController();
   let fullText = '';
 
   try {
-    const res = await fetch(`${apiUrl}/v1/chat/completions`, {
+    const res = await fetch(`${s.apiUrl}/v1/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        messages,
-        temperature,
-        max_tokens: maxTokens,
+        messages: apiMessages,
+        temperature: s.temperature,
+        max_tokens: s.maxTokens,
         stream: true,
       }),
       signal: abortController.signal,
     });
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -452,28 +773,23 @@ async function sendMessage() {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      buffer = lines.pop(); // keep incomplete line
+      buffer = lines.pop();
 
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed || !trimmed.startsWith('data: ')) continue;
         const data = trimmed.slice(6);
         if (data === '[DONE]') continue;
-
         try {
-          const chunk = JSON.parse(data);
-          const delta = chunk.choices?.[0]?.delta;
+          const delta = JSON.parse(data).choices?.[0]?.delta;
           if (delta?.content) {
             fullText += delta.content;
             contentDiv.innerHTML = renderContent(fullText) + '<span class="cursor"></span>';
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
           }
-        } catch (e) {
-          // skip unparseable chunks
-        }
+        } catch (e) { /* skip */ }
       }
     }
   } catch (e) {
@@ -482,11 +798,11 @@ async function sendMessage() {
     }
   }
 
-  // Remove cursor, finalize
-  contentDiv.innerHTML = renderContent(fullText || '[empty response]');
-  if (fullText) {
-    conversationHistory.push({ role: 'assistant', content: fullText });
-  }
+  // Finalize
+  const currentMsgs = getActiveMessages();
+  currentMsgs[currentMsgs.length - 1].content = fullText;
+  setActiveMessages(currentMsgs);
+  renderChat();
 
   isGenerating = false;
   abortController = null;
@@ -496,9 +812,31 @@ async function sendMessage() {
 }
 
 function stopGeneration() {
-  if (abortController) {
-    abortController.abort();
-  }
+  if (abortController) abortController.abort();
+}
+
+// ---- Init ----
+
+inputEl.addEventListener('input', () => {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 150) + 'px';
+});
+
+inputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+tempSlider.addEventListener('input', () => {
+  tempVal.textContent = parseFloat(tempSlider.value).toFixed(2);
+});
+
+// Boot
+loadAll();
+if (!activeConvId || !conversations[activeConvId]) {
+  newConversation();
+} else {
+  renderConvList();
+  renderChat();
 }
 </script>
 
