@@ -89,7 +89,7 @@ benchmark.py     Async streaming benchmark with concurrent requests
 
 - Run python server.py on your interactive job
 - Server starts on 0.0.0.0:8000
-- Run this on your laptop: ssh -L 8000:<JOB NODE>:8000 USER@b65c909e-hn-0.cloud.together.ai
+- Run this on your laptop: ssh -L 8000:<JOB_NODE>:8000 USER@b65c909e-hn-0.cloud.together.ai
 - Open chat.html on your laptop
 
 <img width="1710" height="1025" alt="Screenshot 2026-03-07 at 6 16 29 AM" src="https://github.com/user-attachments/assets/fb786db7-b413-4b72-a014-4cf152d98bcf" />
