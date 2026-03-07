@@ -201,7 +201,9 @@ class PagedKVCache:
             for _ in range(self.num_layers)
         ]
 
-        self.free_pages: deque[int] = deque(range(self.max_num_pages))
+        # Reserve last page as scratch for CUDA graph padding (never allocated to real requests)
+        self.scratch_page = self.max_num_pages - 1
+        self.free_pages: deque[int] = deque(range(self.max_num_pages - 1))
 
     def allocate_pages(self, num_pages: int) -> list[int]:
         """Allocate pages from the free list."""
@@ -351,7 +353,7 @@ GRAPH_BATCH_SIZES = [1, 2, 4, 8, 16, 32, 48, 64]
 class CUDAGraphRunner:
     """Captures and replays a CUDA graph for a fixed decode batch size."""
 
-    def __init__(self, batch_size: int, max_num_pages: int, device: torch.device):
+    def __init__(self, batch_size: int, max_num_pages: int, scratch_page: int, device: torch.device):
         self.batch_size = batch_size
         self.device = device
         self.graph: torch.cuda.CUDAGraph | None = None
@@ -361,8 +363,10 @@ class CUDAGraphRunner:
         self.position_ids = torch.zeros(batch_size, 1, dtype=torch.long, device=device)
 
         # Static metadata buffers for FlashInfer append_paged_kv_cache
+        # Initialize kv_page_indices to scratch_page so dummy padding writes
+        # go to the scratch page instead of corrupting real requests' KV cache
         self.kv_page_indptr = torch.zeros(batch_size + 1, dtype=torch.int32, device=device)
-        self.kv_page_indices = torch.zeros(max_num_pages, dtype=torch.int32, device=device)
+        self.kv_page_indices = torch.full((max_num_pages,), scratch_page, dtype=torch.int32, device=device)
         self.kv_last_page_len = torch.ones(batch_size, dtype=torch.int32, device=device)
         self.append_indptr = torch.arange(batch_size + 1, dtype=torch.int32, device=device)
         self.batch_indices = torch.arange(batch_size, dtype=torch.int32, device=device)
@@ -545,7 +549,7 @@ class Scheduler:
             for bs in GRAPH_BATCH_SIZES:
                 if bs > max_batch_size:
                     break
-                runner = CUDAGraphRunner(bs, max_pages, device)
+                runner = CUDAGraphRunner(bs, max_pages, self.kv_cache.scratch_page, device)
                 runner.capture(
                     model, self._decode_wrapper, self.kv_cache,
                     self.padded_num_qo_heads, config, page_size, dtype,
