@@ -342,6 +342,130 @@ def sample_batch(logits: torch.Tensor, temperatures: list[float]) -> list[int]:
 
 
 # ---------------------------------------------------------------------------
+# CUDA Graph Runner
+# ---------------------------------------------------------------------------
+
+GRAPH_BATCH_SIZES = [1, 2, 4, 8, 16, 32, 48, 64]
+
+
+class CUDAGraphRunner:
+    """Captures and replays a CUDA graph for a fixed decode batch size."""
+
+    def __init__(self, batch_size: int, max_num_pages: int, device: torch.device):
+        self.batch_size = batch_size
+        self.device = device
+        self.graph: torch.cuda.CUDAGraph | None = None
+
+        # Static input buffers (filled before replay)
+        self.input_ids = torch.zeros(batch_size, 1, dtype=torch.long, device=device)
+        self.position_ids = torch.zeros(batch_size, 1, dtype=torch.long, device=device)
+
+        # Static metadata buffers for FlashInfer append_paged_kv_cache
+        self.kv_page_indptr = torch.zeros(batch_size + 1, dtype=torch.int32, device=device)
+        self.kv_page_indices = torch.zeros(max_num_pages, dtype=torch.int32, device=device)
+        self.kv_last_page_len = torch.ones(batch_size, dtype=torch.int32, device=device)
+        self.append_indptr = torch.arange(batch_size + 1, dtype=torch.int32, device=device)
+        self.batch_indices = torch.arange(batch_size, dtype=torch.int32, device=device)
+        self.positions = torch.zeros(batch_size, dtype=torch.int32, device=device)
+
+        # Output buffer (set during capture)
+        self.logits: torch.Tensor | None = None
+
+    def capture(
+        self,
+        model: Qwen2Model,
+        decode_wrapper,
+        paged_kv_cache,
+        padded_num_qo_heads: int,
+        config: Qwen2Config,
+        page_size: int,
+        dtype: torch.dtype,
+    ) -> None:
+        """Warmup and capture the decode forward pass."""
+        backend = AttentionBackend(
+            paged_kv_cache=paged_kv_cache,
+            wrapper=decode_wrapper,
+            mode="decode",
+            kv_page_indptr=self.kv_page_indptr,
+            kv_page_indices=self.kv_page_indices,
+            kv_last_page_len=self.kv_last_page_len,
+            append_indptr=self.append_indptr,
+            batch_indices=self.batch_indices,
+            positions=self.positions,
+        )
+
+        # Plan with dummy metadata for this batch size
+        decode_wrapper.plan(
+            indptr=self.kv_page_indptr,
+            indices=self.kv_page_indices[:self.batch_size],
+            last_page_len=self.kv_last_page_len,
+            num_qo_heads=padded_num_qo_heads,
+            num_kv_heads=config.num_key_value_heads,
+            head_dim=config.head_dim,
+            page_size=page_size,
+            pos_encoding_mode="NONE",
+            q_data_type=dtype,
+            data_type=dtype,
+        )
+
+        # Warmup on a side stream
+        s = torch.cuda.Stream()
+        s.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(s):
+            for _ in range(3):
+                backend._layer_idx = 0
+                logits = model(
+                    self.input_ids,
+                    position_ids=self.position_ids,
+                    attn_backend=backend,
+                )
+        s.synchronize()
+        torch.cuda.current_stream().wait_stream(s)
+
+        # Capture
+        self.graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(self.graph):
+            backend._layer_idx = 0
+            self.logits = model(
+                self.input_ids,
+                position_ids=self.position_ids,
+                attn_backend=backend,
+            )
+
+        self._backend = backend
+        logger.info("Captured CUDA graph for batch_size=%d", self.batch_size)
+
+    def replay(
+        self,
+        input_ids: torch.Tensor,
+        position_ids: torch.Tensor,
+        kv_page_indptr: torch.Tensor,
+        kv_page_indices: torch.Tensor,
+        kv_last_page_len: torch.Tensor,
+        batch_indices: torch.Tensor,
+        positions: torch.Tensor,
+    ) -> torch.Tensor:
+        """Copy new data into static buffers and replay the graph."""
+        # Copy inputs
+        self.input_ids[:input_ids.shape[0]].copy_(input_ids)
+        self.position_ids[:position_ids.shape[0]].copy_(position_ids)
+
+        # Copy metadata
+        self.kv_page_indptr[:kv_page_indptr.shape[0]].copy_(kv_page_indptr)
+        self.kv_page_indices[:kv_page_indices.shape[0]].copy_(kv_page_indices)
+        self.kv_last_page_len[:kv_last_page_len.shape[0]].copy_(kv_last_page_len)
+        self.batch_indices[:batch_indices.shape[0]].copy_(batch_indices)
+        self.positions[:positions.shape[0]].copy_(positions)
+
+        # Reset layer counter
+        self._backend._layer_idx = 0
+
+        # Replay
+        self.graph.replay()
+        return self.logits
+
+
+# ---------------------------------------------------------------------------
 # Scheduler
 # ---------------------------------------------------------------------------
 
@@ -413,6 +537,21 @@ class Scheduler:
             self.kv_cache = BatchedKVCache(
                 config, max_batch_size, max_seq_len, device, dtype
             )
+
+        # CUDA graph runners for decode (only for FlashInfer path)
+        self._graph_runners: dict[int, CUDAGraphRunner] = {}
+        if self.use_flashinfer:
+            max_pages = self.kv_cache.max_num_pages
+            for bs in GRAPH_BATCH_SIZES:
+                if bs > max_batch_size:
+                    break
+                runner = CUDAGraphRunner(bs, max_pages, device)
+                runner.capture(
+                    model, self._decode_wrapper, self.kv_cache,
+                    self.padded_num_qo_heads, config, page_size, dtype,
+                )
+                self._graph_runners[bs] = runner
+            logger.info("Captured CUDA graphs for batch sizes: %s", list(self._graph_runners.keys()))
 
         self.waiting_queue: deque[Request] = deque()
         self.active_requests: list[Request] = []
@@ -728,43 +867,86 @@ class Scheduler:
             batch_size + 1, dtype=torch.int32, device=self.device
         )
 
-        # Plan the decode wrapper
-        self._decode_wrapper.plan(
-            indptr=kv_page_indptr,
-            indices=kv_page_indices,
-            last_page_len=kv_last_page_len,
-            num_qo_heads=self.padded_num_qo_heads,
-            num_kv_heads=self.config.num_key_value_heads,
-            head_dim=self.config.head_dim,
-            page_size=self.page_size,
-            pos_encoding_mode="NONE",
-            q_data_type=self.dtype,
-            data_type=self.dtype,
-        )
-
         # batch_indices: one token per request; positions: current_position for each
         batch_indices = torch.arange(batch_size, dtype=torch.int32, device=self.device)
         positions_append = torch.tensor(
             [r.current_position for r in decoding], dtype=torch.int32, device=self.device
         )
 
-        backend = AttentionBackend(
-            paged_kv_cache=self.kv_cache,
-            wrapper=self._decode_wrapper,
-            mode="decode",
-            kv_page_indptr=kv_page_indptr,
-            kv_page_indices=kv_page_indices,
-            kv_last_page_len=kv_last_page_len,
-            append_indptr=append_indptr,
-            batch_indices=batch_indices,
-            positions=positions_append,
-        )
+        # Find the nearest captured graph batch size
+        padded_bs = next((bs for bs in GRAPH_BATCH_SIZES if bs >= batch_size), 0)
+        runner = self._graph_runners.get(padded_bs) if padded_bs else None
 
-        logits = self.model(
-            input_ids,
-            position_ids=position_ids,
-            attn_backend=backend,
-        )
+        if runner is not None:
+            # Pad inputs to the captured batch size
+            if batch_size < padded_bs:
+                pad = padded_bs - batch_size
+                input_ids = F.pad(input_ids, (0, 0, 0, pad))
+                position_ids = F.pad(position_ids, (0, 0, 0, pad))
+                # Pad CSR metadata: extend indptr with repeated last value
+                last_val = kv_page_indptr[-1]
+                kv_page_indptr = F.pad(kv_page_indptr, (0, pad), value=last_val.item())
+                kv_last_page_len = F.pad(kv_last_page_len, (0, pad), value=1)
+                batch_indices = torch.arange(padded_bs, dtype=torch.int32, device=self.device)
+                positions_append = F.pad(positions_append, (0, pad))
+
+            # Copy metadata into runner's static buffers FIRST, then plan
+            # (plan reads from these buffers, graph replay will too)
+            runner.kv_page_indptr[:kv_page_indptr.shape[0]].copy_(kv_page_indptr)
+            runner.kv_page_indices[:kv_page_indices.shape[0]].copy_(kv_page_indices)
+            runner.kv_last_page_len[:kv_last_page_len.shape[0]].copy_(kv_last_page_len)
+
+            # Plan with the runner's static buffers (outside graph)
+            self._decode_wrapper.plan(
+                indptr=runner.kv_page_indptr[:padded_bs + 1],
+                indices=runner.kv_page_indices[:kv_page_indices.shape[0]],
+                last_page_len=runner.kv_last_page_len[:padded_bs],
+                num_qo_heads=self.padded_num_qo_heads,
+                num_kv_heads=self.config.num_key_value_heads,
+                head_dim=self.config.head_dim,
+                page_size=self.page_size,
+                pos_encoding_mode="NONE",
+                q_data_type=self.dtype,
+                data_type=self.dtype,
+            )
+
+            # Replay the graph
+            logits = runner.replay(
+                input_ids, position_ids,
+                kv_page_indptr, kv_page_indices, kv_last_page_len,
+                batch_indices, positions_append,
+            )
+            logits = logits[:batch_size]  # strip padding
+        else:
+            # Fallback: eager mode for batch sizes without a captured graph
+            self._decode_wrapper.plan(
+                indptr=kv_page_indptr,
+                indices=kv_page_indices,
+                last_page_len=kv_last_page_len,
+                num_qo_heads=self.padded_num_qo_heads,
+                num_kv_heads=self.config.num_key_value_heads,
+                head_dim=self.config.head_dim,
+                page_size=self.page_size,
+                pos_encoding_mode="NONE",
+                q_data_type=self.dtype,
+                data_type=self.dtype,
+            )
+            backend = AttentionBackend(
+                paged_kv_cache=self.kv_cache,
+                wrapper=self._decode_wrapper,
+                mode="decode",
+                kv_page_indptr=kv_page_indptr,
+                kv_page_indices=kv_page_indices,
+                kv_last_page_len=kv_last_page_len,
+                append_indptr=append_indptr,
+                batch_indices=batch_indices,
+                positions=positions_append,
+            )
+            logits = self.model(
+                input_ids,
+                position_ids=position_ids,
+                attn_backend=backend,
+            )
 
         # No write-back needed — KV written directly into paged cache
 
