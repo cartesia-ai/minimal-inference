@@ -112,6 +112,11 @@ class Attention(nn.Module):
         self.num_groups = self.num_heads // self.num_kv_heads
         self.scale = self.head_dim**-0.5
 
+        # Pad Q heads to next power-of-2 group size for FlashInfer compatibility
+        padded_group = 1 << (self.num_groups - 1).bit_length()  # next power of 2
+        self.padded_num_heads = padded_group * self.num_kv_heads
+        self.needs_head_padding = self.padded_num_heads != self.num_heads
+
         self.q_proj = nn.Linear(
             config.hidden_size, self.num_heads * self.head_dim, bias=True
         )
@@ -199,8 +204,24 @@ class Attention(nn.Module):
             # Decode: [batch_size, num_heads, head_dim]
             q_fi = q.squeeze(2)
 
+        # Pad Q heads per-group for non-power-of-2 GQA (e.g. 14 -> 16 heads)
+        if self.needs_head_padding:
+            leading = q_fi.shape[:-2]  # [total_tokens] or [bsz]
+            padded_group = self.padded_num_heads // self.num_kv_heads
+            q_fi = q_fi.view(*leading, self.num_kv_heads, self.num_groups, self.head_dim)
+            q_fi = F.pad(q_fi, (0, 0, 0, padded_group - self.num_groups))
+            q_fi = q_fi.reshape(*leading, self.padded_num_heads, self.head_dim)
+
         # Run fused attention kernel (handles causal mask + GQA internally)
         out = backend.wrapper.run(q_fi, kv_data)
+
+        # Strip padded heads
+        if self.needs_head_padding:
+            leading = out.shape[:-2]
+            padded_group = self.padded_num_heads // self.num_kv_heads
+            out = out.view(*leading, self.num_kv_heads, padded_group, self.head_dim)
+            out = out[:, :, :self.num_groups, :] if out.dim() == 4 else out[..., :self.num_groups, :]
+            out = out.reshape(*leading, self.num_heads, self.head_dim)
 
         # Reshape output back to [bsz, seq_len, hidden_size]
         if backend.mode == "prefill":

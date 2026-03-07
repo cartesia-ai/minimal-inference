@@ -333,8 +333,19 @@ class Scheduler:
         self.max_seq_len = max_seq_len
         self.page_size = page_size
 
-        # Decide which attention backend to use
+        # Decide which attention backend to use.
         self.use_flashinfer = device.type == "cuda" and _FLASHINFER_AVAILABLE
+
+        # Pad Q heads to next power-of-2 group size for FlashInfer GQA compatibility
+        gqa_group_size = config.num_attention_heads // config.num_key_value_heads
+        padded_group = 1 << (gqa_group_size - 1).bit_length()
+        self.padded_num_qo_heads = padded_group * config.num_key_value_heads
+        if self.padded_num_qo_heads != config.num_attention_heads:
+            logger.info(
+                "Padding Q heads %d -> %d for FlashInfer (group_size %d -> %d)",
+                config.num_attention_heads, self.padded_num_qo_heads,
+                gqa_group_size, padded_group,
+            )
 
         if self.use_flashinfer:
             logger.info("Using FlashInfer paged attention backend (device=%s)", device)
@@ -511,7 +522,7 @@ class Scheduler:
             paged_kv_indptr=kv_page_indptr,
             paged_kv_indices=kv_page_indices,
             paged_kv_last_page_len=kv_last_page_len,
-            num_qo_heads=self.config.num_attention_heads,
+            num_qo_heads=self.padded_num_qo_heads,
             num_kv_heads=self.config.num_key_value_heads,
             head_dim_qk=self.config.head_dim,
             page_size=self.page_size,
@@ -678,7 +689,7 @@ class Scheduler:
             indptr=kv_page_indptr,
             indices=kv_page_indices,
             last_page_len=kv_last_page_len,
-            num_qo_heads=self.config.num_attention_heads,
+            num_qo_heads=self.padded_num_qo_heads,
             num_kv_heads=self.config.num_key_value_heads,
             head_dim=self.config.head_dim,
             page_size=self.page_size,

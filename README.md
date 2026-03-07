@@ -84,6 +84,12 @@ Req C (50 tokens):   [page 4][page 5][page 6]
                      ↑ pages allocated from shared pool
 ```
 
+## Notes
+
+### GQA head padding for FlashInfer
+
+FlashInfer requires power-of-2 GQA group sizes. Qwen2.5-0.5B has 14 Q heads and 2 KV heads (group_size=7), so the attention layer automatically pads Q heads from 14 to 16 (group_size 7→8) before calling FlashInfer kernels, then strips the dummy heads from the output. This adds ~14% extra compute in the attention kernel but enables paged attention for models with non-power-of-2 GQA ratios.
+
 ## Limitations
 
 - Sequential prefill (one request at a time)
