@@ -238,6 +238,10 @@ class AttentionBackend:
     # For KV append: maps new tokens to requests
     append_indptr: torch.Tensor  # [batch_size + 1], int32
 
+    # For KV append: batch index and position of each appended token
+    batch_indices: torch.Tensor  # [total_tokens], int32
+    positions: torch.Tensor  # [total_tokens], int32
+
     # Layer counter — each Attention.forward() call advances this
     _layer_idx: int = 0
 
@@ -515,6 +519,10 @@ class Scheduler:
             pos_encoding_mode="NONE",
         )
 
+        # batch_indices: all tokens belong to request 0; positions: 0..prompt_len-1
+        batch_indices = torch.zeros(prompt_len, dtype=torch.int32, device=self.device)
+        positions_append = torch.arange(prompt_len, dtype=torch.int32, device=self.device)
+
         # Build attention backend
         backend = AttentionBackend(
             paged_kv_cache=self.kv_cache,
@@ -524,6 +532,8 @@ class Scheduler:
             kv_page_indices=kv_page_indices,
             kv_last_page_len=kv_last_page_len,
             append_indptr=qo_indptr,  # same as qo_indptr for prefill
+            batch_indices=batch_indices,
+            positions=positions_append,
         )
 
         logits = self.model(
@@ -675,6 +685,12 @@ class Scheduler:
             data_type=self.dtype,
         )
 
+        # batch_indices: one token per request; positions: current_position for each
+        batch_indices = torch.arange(batch_size, dtype=torch.int32, device=self.device)
+        positions_append = torch.tensor(
+            [r.current_position for r in decoding], dtype=torch.int32, device=self.device
+        )
+
         backend = AttentionBackend(
             paged_kv_cache=self.kv_cache,
             wrapper=self._decode_wrapper,
@@ -683,6 +699,8 @@ class Scheduler:
             kv_page_indices=kv_page_indices,
             kv_last_page_len=kv_last_page_len,
             append_indptr=append_indptr,
+            batch_indices=batch_indices,
+            positions=positions_append,
         )
 
         logits = self.model(

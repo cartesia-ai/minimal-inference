@@ -183,7 +183,8 @@ class Attention(nn.Module):
         flashinfer.page.append_paged_kv_cache(
             k_append,
             v_append,
-            backend.append_indptr,
+            backend.batch_indices,
+            backend.positions,
             kv_data,
             backend.kv_page_indices,
             backend.kv_page_indptr,
