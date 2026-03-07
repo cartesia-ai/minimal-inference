@@ -1,0 +1,12 @@
+model_path: ./Qwen2.5-0.5B-Instruct
+device: cpu
+dtype: bfloat16
+
+server:
+  host: 0.0.0.0
+  port: 8000
+
+scheduler:
+  max_seq_len: 4096
+  max_batch_size: 8
+  page_size: 16
