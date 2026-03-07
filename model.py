@@ -119,7 +119,7 @@ class RMSNorm(nn.Module):
         self.eps = eps
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return F.rms_norm(x.float(), self.weight.shape, self.weight.float(), self.eps).to(x.dtype)
+        return F.rms_norm(x, self.weight.shape, self.weight, self.eps)
 
 
 class Attention(nn.Module):
