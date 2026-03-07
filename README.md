@@ -86,7 +86,7 @@ Req C (50 tokens):   [page 4][page 5][page 6]
 
 ## Benchmarks
 
-Qwen2.5-7B-Instruct, single A100, bfloat16, FlashInfer paged attention, page_size=16, max_tokens=50 per request.
+Qwen2.5-7B-Instruct, single H100, bfloat16, FlashInfer paged attention, page_size=16, max_tokens=50 per request.
 
 | Concurrent Requests | TTFT (avg) | T2T (avg/stream) | Aggregate tok/s |
 |--------------------:|----------:|-----------------:|----------------:|
