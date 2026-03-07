@@ -117,11 +117,7 @@ class RMSNorm(nn.Module):
         self.eps = eps
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        orig_dtype = x.dtype
-        x = x.float()
-        variance = x.pow(2).mean(-1, keepdim=True)
-        x = x * torch.rsqrt(variance + self.eps)
-        return (self.weight * x).to(orig_dtype)
+        return F.rms_norm(x, self.weight.shape, self.weight, self.eps)
 
 
 class Attention(nn.Module):
