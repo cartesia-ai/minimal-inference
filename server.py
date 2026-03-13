@@ -263,6 +263,8 @@ def init_engine(config: dict):
     if isinstance(im_end, int) and im_end != tokenizer.unk_token_id:
         eos_ids.add(im_end)
 
+    use_flashinfer = config["scheduler"].get("use_flashinfer", True)
+
     scheduler = Scheduler(
         model=model,
         config=model_config,
@@ -272,6 +274,7 @@ def init_engine(config: dict):
         max_seq_len=max_seq_len,
         page_size=page_size,
         eos_token_ids=eos_ids if eos_ids else None,
+        use_flashinfer=use_flashinfer,
     )
     scheduler.start()
 

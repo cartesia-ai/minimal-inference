@@ -10,3 +10,4 @@ scheduler:
   max_seq_len: 4096
   max_batch_size: 40
   page_size: 16
+  use_flashinfer: true

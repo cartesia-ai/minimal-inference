@@ -485,6 +485,7 @@ class Scheduler:
         max_seq_len: int = 4096,
         page_size: int = 16,
         eos_token_ids: set[int] | None = None,
+        use_flashinfer: bool = True,
     ):
         global EOS_TOKEN_IDS
         if eos_token_ids is not None:
@@ -500,7 +501,7 @@ class Scheduler:
         self.page_size = page_size
 
         # Decide which attention backend to use.
-        self.use_flashinfer = device.type == "cuda" and _FLASHINFER_AVAILABLE
+        self.use_flashinfer = use_flashinfer and device.type == "cuda" and _FLASHINFER_AVAILABLE
 
         # Pad Q heads to next power-of-2 group size for FlashInfer GQA compatibility
         gqa_group_size = config.num_attention_heads // config.num_key_value_heads
