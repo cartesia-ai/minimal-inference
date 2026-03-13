@@ -363,6 +363,7 @@ class CUDAGraphRunner:
     def __init__(self, batch_size: int, max_num_pages: int, scratch_page: int, device: torch.device):
         self.batch_size = batch_size
         self.device = device
+        self._scratch_page = scratch_page
         self.graph: torch.cuda.CUDAGraph | None = None
 
         # Static input buffers (filled before replay)
@@ -464,6 +465,11 @@ class CUDAGraphRunner:
         # Copy metadata
         self.kv_page_indptr[:kv_page_indptr.shape[0]].copy_(kv_page_indptr)
         self.kv_page_indices[:kv_page_indices.shape[0]].copy_(kv_page_indices)
+        # Reset tail to scratch_page so stale indices from previous steps
+        # don't point to pages now owned by different requests
+        n = kv_page_indices.shape[0]
+        if n < self.kv_page_indices.shape[0]:
+            self.kv_page_indices[n:].fill_(self._scratch_page)
         self.kv_last_page_len[:kv_last_page_len.shape[0]].copy_(kv_last_page_len)
         self.batch_indices[:batch_indices.shape[0]].copy_(batch_indices)
         self.positions[:positions.shape[0]].copy_(positions)
@@ -648,8 +654,6 @@ class Scheduler:
 
     @torch.inference_mode()
     def _prefill_new_requests(self) -> None:
-        # Prefill one request per step. Multiple back-to-back prefills on the
-        # shared FlashInfer prefill wrapper corrupt subsequent requests' KV cache.
         for req in self.active_requests:
             if req.status != RequestStatus.PREFILLING:
                 continue
@@ -658,7 +662,6 @@ class Scheduler:
                 self._prefill_paged(req)
             else:
                 self._prefill_padded(req)
-            break  # one prefill per step
 
     def _prefill_padded(self, req: Request) -> None:
         prompt_len = len(req.input_ids)
@@ -888,9 +891,13 @@ class Scheduler:
         )
 
         # Find the nearest captured graph batch size
-        # TEMPORARILY DISABLED for debugging concurrent corruption
         padded_bs = 0
         runner = None
+        for gbs in GRAPH_BATCH_SIZES:
+            if gbs >= batch_size and gbs in self._graph_runners:
+                padded_bs = gbs
+                runner = self._graph_runners[gbs]
+                break
 
         if runner is not None:
             # Pad inputs to the captured batch size
