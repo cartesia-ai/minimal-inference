@@ -49,6 +49,12 @@ class ModelConfig:
     tie_word_embeddings: bool = True
     attn_bias: bool = True  # Qwen uses bias, Mistral doesn't
 
+    # Random projection KV cache compression (Johnson-Lindenstrauss).
+    # 0 = disabled. When > 0, K and Q are projected from head_dim to kv_proj_dim
+    # using a shared random matrix. K is stored compressed in cache, Q is
+    # projected at query time. V stays full-dimensional.
+    kv_proj_dim: int = 0
+
     @classmethod
     def from_pretrained(cls, model_path: str) -> "ModelConfig":
         """Load config from a HuggingFace model directory's config.json."""
@@ -68,6 +74,7 @@ class ModelConfig:
             max_position_embeddings=raw.get("max_position_embeddings", 32768),
             tie_word_embeddings=raw.get("tie_word_embeddings", True),
             attn_bias=raw.get("attention_bias", raw.get("model_type", "") != "mistral"),
+            kv_proj_dim=raw.get("kv_proj_dim", 0),
         )
 
 
@@ -148,6 +155,16 @@ class Attention(nn.Module):
         self.o_proj = nn.Linear(
             self.num_heads * self.head_dim, config.hidden_size, bias=False
         )
+
+        # JL random projection for KV cache compression.
+        # Shared matrix P projects both K and Q from head_dim -> proj_dim (post-RoPE).
+        # K is stored compressed in cache; Q is projected at query time.
+        # V is untouched — it's just weighted-summed, no dot-product to preserve.
+        self.kv_proj_dim = config.kv_proj_dim
+        if self.kv_proj_dim > 0:
+            # P ~ N(0, 1/proj_dim) per JL lemma: [proj_dim, head_dim]
+            rp = torch.randn(self.kv_proj_dim, self.head_dim) / (self.kv_proj_dim ** 0.5)
+            self.register_buffer("rp", rp, persistent=False)
 
     def forward(
         self,
@@ -251,6 +268,10 @@ class Attention(nn.Module):
 
         return out
 
+    def _jl_project(self, x: torch.Tensor) -> torch.Tensor:
+        """Project [..., head_dim] -> [..., proj_dim] via x @ P^T."""
+        return x @ self.rp.T
+
     def _pytorch_attention(
         self,
         q: torch.Tensor,
@@ -262,7 +283,19 @@ class Attention(nn.Module):
         bsz: int,
         seq_len: int,
     ) -> torch.Tensor:
-        """PyTorch SDPA path (CPU/fallback with padded KV cache)."""
+        """PyTorch SDPA path (CPU/fallback with padded KV cache).
+
+        When kv_proj_dim > 0, K and Q are projected to proj_dim using a shared
+        random matrix P (JL lemma). K is stored compressed in cache, Q is
+        projected at query time. V stays full-dimensional.
+        Attention: softmax(Q_proj @ K_proj^T / √d) @ V
+        """
+        use_jl = self.kv_proj_dim > 0
+
+        # Project K post-RoPE before caching
+        if use_jl:
+            k = self._jl_project(k)
+
         # KV cache update
         if kv_cache is not None:
             k_cache, v_cache = kv_cache
@@ -286,6 +319,10 @@ class Attention(nn.Module):
         # GQA: expand KV heads to match Q heads
         k = k.repeat_interleave(self.num_groups, dim=1)
         v = v.repeat_interleave(self.num_groups, dim=1)
+
+        # Project Q with same matrix so Q_proj @ K_proj^T ≈ Q @ K^T
+        if use_jl:
+            q = self._jl_project(q)
 
         # Scaled dot-product attention
         attn = (q @ k.transpose(-2, -1)) * self.scale

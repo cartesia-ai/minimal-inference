@@ -98,7 +98,8 @@ class Request:
 class BatchedKVCache:
     """Pre-allocated KV cache with fixed batch slots.
 
-    Shape per layer: [max_batch_size, num_kv_heads, max_seq_len, head_dim]
+    Shape per layer: [max_batch_size, num_kv_heads, max_seq_len, dim]
+    where dim is head_dim normally, or kv_proj_dim when JL compression is active.
     """
 
     def __init__(
@@ -111,14 +112,20 @@ class BatchedKVCache:
     ):
         self.max_batch_size = max_batch_size
         self.max_seq_len = max_seq_len
+
+        # When JL projection is enabled, K is stored in the projected
+        # dimension, saving memory. V stays at full head_dim.
+        k_dim = config.kv_proj_dim if config.kv_proj_dim > 0 else config.head_dim
+        v_dim = config.head_dim
+
         self.caches: list[tuple[torch.Tensor, torch.Tensor]] = []
         for _ in range(config.num_hidden_layers):
             k = torch.zeros(
-                max_batch_size, config.num_key_value_heads, max_seq_len, config.head_dim,
+                max_batch_size, config.num_key_value_heads, max_seq_len, k_dim,
                 device=device, dtype=dtype,
             )
             v = torch.zeros(
-                max_batch_size, config.num_key_value_heads, max_seq_len, config.head_dim,
+                max_batch_size, config.num_key_value_heads, max_seq_len, v_dim,
                 device=device, dtype=dtype,
             )
             self.caches.append((k, v))

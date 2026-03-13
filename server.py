@@ -246,6 +246,11 @@ def init_engine(config: dict):
     print(f"Loading model from {model_path} on {device} ({dtype_str})...")
 
     model_config = ModelConfig.from_pretrained(model_path)
+
+    # Override with JL projection setting from YAML config if present
+    if "kv_proj_dim" in config:
+        model_config.kv_proj_dim = config["kv_proj_dim"]
+
     model = Model(model_config)
     load_weights(model, model_path, device=device, dtype=dtype)
     model = model.to(device=device, dtype=dtype).eval()

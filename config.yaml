@@ -10,3 +10,7 @@ scheduler:
   max_seq_len: 4096
   max_batch_size: 40
   page_size: 16
+
+# JL random projection KV cache compression (padded path only).
+# Projects K and Q to lower dim; V stays full. E.g. 32 for 2x K-cache compression on head_dim=64.
+# kv_proj_dim: 32
