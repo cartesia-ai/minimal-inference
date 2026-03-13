@@ -648,6 +648,8 @@ class Scheduler:
 
     @torch.inference_mode()
     def _prefill_new_requests(self) -> None:
+        # Prefill one request per step. Multiple back-to-back prefills on the
+        # shared FlashInfer prefill wrapper corrupt subsequent requests' KV cache.
         for req in self.active_requests:
             if req.status != RequestStatus.PREFILLING:
                 continue
@@ -656,6 +658,7 @@ class Scheduler:
                 self._prefill_paged(req)
             else:
                 self._prefill_padded(req)
+            break  # one prefill per step
 
     def _prefill_padded(self, req: Request) -> None:
         prompt_len = len(req.input_ids)
