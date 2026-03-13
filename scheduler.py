@@ -888,8 +888,9 @@ class Scheduler:
         )
 
         # Find the nearest captured graph batch size
-        padded_bs = next((bs for bs in GRAPH_BATCH_SIZES if bs >= batch_size), 0)
-        runner = self._graph_runners.get(padded_bs) if padded_bs else None
+        # TEMPORARILY DISABLED for debugging concurrent corruption
+        padded_bs = 0
+        runner = None
 
         if runner is not None:
             # Pad inputs to the captured batch size
