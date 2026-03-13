@@ -891,13 +891,9 @@ class Scheduler:
         )
 
         # Find the nearest captured graph batch size
+        # TEMPORARILY DISABLED — plan()/replay() interaction causes corruption
         padded_bs = 0
         runner = None
-        for gbs in GRAPH_BATCH_SIZES:
-            if gbs >= batch_size and gbs in self._graph_runners:
-                padded_bs = gbs
-                runner = self._graph_runners[gbs]
-                break
 
         if runner is not None:
             # Pad inputs to the captured batch size
