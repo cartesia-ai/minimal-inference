@@ -513,7 +513,15 @@ class Scheduler:
         self.page_size = page_size
 
         # Decide which attention backend to use.
-        self.use_flashinfer = device.type == "cuda" and _FLASHINFER_AVAILABLE
+        # JL projection needs K at proj_dim and V at head_dim — incompatible with
+        # FlashInfer's paged KV cache which requires a single head_dim for both.
+        self.use_flashinfer = (
+            device.type == "cuda"
+            and _FLASHINFER_AVAILABLE
+            and config.kv_proj_dim == 0
+        )
+        if device.type == "cuda" and _FLASHINFER_AVAILABLE and config.kv_proj_dim > 0:
+            logger.info("JL projection enabled (kv_proj_dim=%d) — using padded SDPA fallback", config.kv_proj_dim)
 
         # Pad Q heads to next power-of-2 group size for FlashInfer GQA compatibility
         gqa_group_size = config.num_attention_heads // config.num_key_value_heads
