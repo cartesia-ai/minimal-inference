@@ -162,7 +162,7 @@ class Attention(nn.Module):
         # V is untouched — it's just weighted-summed, no dot-product to preserve.
         self.kv_proj_dim = config.kv_proj_dim
         if self.kv_proj_dim > 0:
-            # P ~ N(0, 1/proj_dim) per JL lemma: [proj_dim, head_dim]
+            # P ~ N(0, 1/proj_dim) so E[P^T P] = I: [proj_dim, head_dim]
             rp = torch.randn(self.kv_proj_dim, self.head_dim) / (self.kv_proj_dim ** 0.5)
             self.register_buffer("rp", rp, persistent=False)
 
@@ -325,9 +325,15 @@ class Attention(nn.Module):
             q = self._jl_project(q)
 
         # Scaled dot-product attention
+        kv_len = k.shape[-2]
         attn = (q @ k.transpose(-2, -1)) * self.scale
         if mask is not None:
             attn = attn + mask
+        elif seq_len > 1:
+            # Causal mask for prefill: Q position i (absolute: start+i) attends to K[0..start+i]
+            causal = torch.full((seq_len, kv_len), float("-inf"), device=q.device, dtype=q.dtype)
+            causal = torch.triu(causal, diagonal=kv_len - seq_len + 1)
+            attn = attn + causal
         attn = F.softmax(attn, dim=-1, dtype=torch.float32).to(q.dtype)
 
         out = (attn @ v).transpose(1, 2).contiguous().view(bsz, seq_len, -1)
