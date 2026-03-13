@@ -916,6 +916,11 @@ class Scheduler:
             # (plan reads from these buffers, graph replay will too)
             runner.kv_page_indptr[:kv_page_indptr.shape[0]].copy_(kv_page_indptr)
             runner.kv_page_indices[:kv_page_indices.shape[0]].copy_(kv_page_indices)
+            # Reset tail to scratch_page BEFORE plan() so dummy padding
+            # slots don't reference stale pages from previous steps
+            n_idx = kv_page_indices.shape[0]
+            if n_idx < runner.kv_page_indices.shape[0]:
+                runner.kv_page_indices[n_idx:].fill_(self.kv_cache.scratch_page)
             runner.kv_last_page_len[:kv_last_page_len.shape[0]].copy_(kv_last_page_len)
 
             # Plan with the runner's static buffers (outside graph)
@@ -932,7 +937,7 @@ class Scheduler:
                 data_type=self.dtype,
             )
 
-            # Replay the graph
+            # Replay the graph (copies same data into static buffers + resets tail)
             logits = runner.replay(
                 input_ids, position_ids,
                 kv_page_indptr, kv_page_indices, kv_last_page_len,
