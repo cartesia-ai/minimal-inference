@@ -4,7 +4,7 @@ Mistral-7B-Instruct-v0.3, single H100, bfloat16, head_dim=128.
 
 ## GSM8K Accuracy (eval_gsm8k.py, two-turn, n=200)
 
-| Metric   | Baseline | kv_proj=96 | kv_proj=110 |
-|---------:|---------:|-----------:|------------:|
-| Accuracy | 56.5%    |            |             |
-| Avg T2T  | 16.0ms   |            |             |
+| Metric   | Baseline | kv_proj=24 | kv_proj=96 | kv_proj=110 |
+|---------:|---------:|-----------:|-----------:|------------:|
+| Accuracy | 56.5%    | 0.0%       |            |             |
+| Avg T2T  | 16.0ms   | 51.0ms     |            |             |

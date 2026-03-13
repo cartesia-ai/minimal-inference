@@ -30,9 +30,9 @@ def parse_answer(text: str) -> str | None:
     """Extract the answer value from model JSON output."""
     try:
         obj = json.loads(text.strip())
-        if "answer" in obj:
+        if isinstance(obj, dict) and "answer" in obj:
             return str(obj["answer"]).strip()
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, ValueError):
         pass
 
     m = re.search(r'\{\s*"answer"\s*:\s*"([^"]*)"\s*\}', text)
