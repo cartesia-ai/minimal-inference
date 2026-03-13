@@ -515,6 +515,7 @@ class Scheduler:
         # Decide which attention backend to use.
         # JL projection needs K at proj_dim and V at head_dim — incompatible with
         # FlashInfer's paged KV cache which requires a single head_dim for both.
+        # Also force SDPA when force_sdpa=True in config for A/B testing.
         self.use_flashinfer = (
             device.type == "cuda"
             and _FLASHINFER_AVAILABLE
