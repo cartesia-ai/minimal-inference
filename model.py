@@ -307,14 +307,11 @@ class Attention(nn.Module):
         k = k.repeat_interleave(self.num_groups, dim=1)
         v = v.repeat_interleave(self.num_groups, dim=1)
 
-        # Use PyTorch's optimized SDPA (handles causal mask, fp32 accumulation)
-        # For prefill without explicit mask, use is_causal=True
-        # When JL is on, override scale to 1/sqrt(head_dim) — the JL matrix preserves
-        # dot products so q_proj @ k_proj.T ≈ q @ k.T, and the model was trained with head_dim scaling
+        # Attention computation
         is_causal = mask is None and seq_len > 1
         out = F.scaled_dot_product_attention(
             q, k, v, attn_mask=mask, is_causal=is_causal,
-            scale=self.scale if self.kv_proj_dim > 0 else None,
+            scale=self.scale,
         )
 
         out = out.transpose(1, 2).contiguous().view(bsz, seq_len, -1)
