@@ -287,13 +287,14 @@ class Attention(nn.Module):
         k = k.repeat_interleave(self.num_groups, dim=1)
         v = v.repeat_interleave(self.num_groups, dim=1)
 
-        # Scaled dot-product attention
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        if mask is not None:
-            attn = attn + mask
-        attn = F.softmax(attn, dim=-1, dtype=torch.float32).to(q.dtype)
+        # Use PyTorch's optimized SDPA (handles causal mask, fp32 accumulation)
+        # For prefill without explicit mask, use is_causal=True
+        is_causal = mask is None and seq_len > 1
+        out = F.scaled_dot_product_attention(
+            q, k, v, attn_mask=mask, is_causal=is_causal,
+        )
 
-        out = (attn @ v).transpose(1, 2).contiguous().view(bsz, seq_len, -1)
+        out = out.transpose(1, 2).contiguous().view(bsz, seq_len, -1)
         return out
 
 
