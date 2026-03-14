@@ -155,7 +155,9 @@ class Attention(nn.Module):
         if self.kv_proj_dim > 0:
             # Orthogonal projection: first kv_proj_dim rows of a random orthogonal matrix.
             # R^T R is the identity on the projected subspace, minimizing dot-product error.
-            full_orth = torch.linalg.qr(torch.randn(self.head_dim, self.head_dim))[0]
+            # Fixed seed for reproducibility across restarts.
+            rng = torch.Generator().manual_seed(42)
+            full_orth = torch.linalg.qr(torch.randn(self.head_dim, self.head_dim, generator=rng))[0]
             rp = full_orth[:self.kv_proj_dim, :]  # [kv_proj_dim, head_dim]
             self.register_buffer("rp", rp, persistent=False)
 
