@@ -288,9 +288,15 @@ class Attention(nn.Module):
         v = v.repeat_interleave(self.num_groups, dim=1)
 
         # Scaled dot-product attention
+        kv_len = k.shape[-2]
         attn = (q @ k.transpose(-2, -1)) * self.scale
         if mask is not None:
             attn = attn + mask
+        elif seq_len > 1:
+            # Causal mask for prefill: token i can only attend to positions <= i
+            causal = torch.full((seq_len, kv_len), float("-inf"), device=q.device, dtype=q.dtype)
+            causal = torch.triu(causal, diagonal=kv_len - seq_len + 1)
+            attn = attn + causal
         attn = F.softmax(attn, dim=-1, dtype=torch.float32).to(q.dtype)
 
         out = (attn @ v).transpose(1, 2).contiguous().view(bsz, seq_len, -1)
