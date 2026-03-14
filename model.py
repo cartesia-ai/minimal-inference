@@ -48,6 +48,7 @@ class ModelConfig:
     max_position_embeddings: int = 32768
     tie_word_embeddings: bool = True
     attn_bias: bool = True  # Qwen uses bias, Mistral doesn't
+    kv_proj_dim: int = 0  # JL random projection dim for KV cache (0 = disabled)
 
     @classmethod
     def from_pretrained(cls, model_path: str) -> "ModelConfig":
@@ -148,6 +149,17 @@ class Attention(nn.Module):
         self.o_proj = nn.Linear(
             self.num_heads * self.head_dim, config.hidden_size, bias=False
         )
+
+        # JL random projection for KV cache compression
+        self.kv_proj_dim = config.kv_proj_dim
+        if self.kv_proj_dim > 0:
+            # R: [kv_proj_dim, head_dim], scaled so E[||Rx||^2] = ||x||^2
+            rp = torch.randn(self.kv_proj_dim, self.head_dim) / (self.kv_proj_dim ** 0.5)
+            self.register_buffer("rp", rp, persistent=False)
+
+    def _jl_project(self, x: torch.Tensor) -> torch.Tensor:
+        """Project x [..., head_dim] -> [..., kv_proj_dim] via random projection."""
+        return x @ self.rp.T
 
     def forward(
         self,
@@ -263,6 +275,10 @@ class Attention(nn.Module):
         seq_len: int,
     ) -> torch.Tensor:
         """PyTorch SDPA path (CPU/fallback with padded KV cache)."""
+        # JL: project K before caching (Q projected later, V stays full dim)
+        if self.kv_proj_dim > 0:
+            k = self._jl_project(k)  # [bsz, kv_heads, seq_len, head_dim] -> [..., kv_proj_dim]
+
         # KV cache update
         if kv_cache is not None:
             k_cache, v_cache = kv_cache
@@ -283,12 +299,17 @@ class Attention(nn.Module):
                 k = k_cache[:, :, : start + seq_len]
                 v = v_cache[:, :, : start + seq_len]
 
+        # JL: project Q to match projected K dimension
+        if self.kv_proj_dim > 0:
+            q = self._jl_project(q)  # [bsz, num_heads, seq_len, head_dim] -> [..., kv_proj_dim]
+
         # GQA: expand KV heads to match Q heads
         k = k.repeat_interleave(self.num_groups, dim=1)
         v = v.repeat_interleave(self.num_groups, dim=1)
 
         # Use PyTorch's optimized SDPA (handles causal mask, fp32 accumulation)
         # For prefill without explicit mask, use is_causal=True
+        # scale: defaults to 1/sqrt(q.size(-1)), which is 1/sqrt(kv_proj_dim) when JL is on
         is_causal = mask is None and seq_len > 1
         out = F.scaled_dot_product_attention(
             q, k, v, attn_mask=mask, is_causal=is_causal,

@@ -112,13 +112,16 @@ class BatchedKVCache:
         self.max_batch_size = max_batch_size
         self.max_seq_len = max_seq_len
         self.caches: list[tuple[torch.Tensor, torch.Tensor]] = []
+        # When JL projection is enabled, K is stored at kv_proj_dim; V stays at head_dim
+        k_dim = config.kv_proj_dim if config.kv_proj_dim > 0 else config.head_dim
+        v_dim = config.head_dim
         for _ in range(config.num_hidden_layers):
             k = torch.zeros(
-                max_batch_size, config.num_key_value_heads, max_seq_len, config.head_dim,
+                max_batch_size, config.num_key_value_heads, max_seq_len, k_dim,
                 device=device, dtype=dtype,
             )
             v = torch.zeros(
-                max_batch_size, config.num_key_value_heads, max_seq_len, config.head_dim,
+                max_batch_size, config.num_key_value_heads, max_seq_len, v_dim,
                 device=device, dtype=dtype,
             )
             self.caches.append((k, v))
@@ -501,7 +504,13 @@ class Scheduler:
         self.page_size = page_size
 
         # Decide which attention backend to use.
-        self.use_flashinfer = use_flashinfer and device.type == "cuda" and _FLASHINFER_AVAILABLE
+        # JL projection is incompatible with FlashInfer (paged KV requires same dim for K and V)
+        self.use_flashinfer = (
+            use_flashinfer
+            and device.type == "cuda"
+            and _FLASHINFER_AVAILABLE
+            and config.kv_proj_dim == 0
+        )
 
         # Pad Q heads to next power-of-2 group size for FlashInfer GQA compatibility
         gqa_group_size = config.num_attention_heads // config.num_key_value_heads
