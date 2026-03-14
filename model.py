@@ -150,11 +150,13 @@ class Attention(nn.Module):
             self.num_heads * self.head_dim, config.hidden_size, bias=False
         )
 
-        # JL random projection for KV cache compression
+        # JL projection for KV cache compression
         self.kv_proj_dim = config.kv_proj_dim
         if self.kv_proj_dim > 0:
-            # R: [kv_proj_dim, head_dim], scaled so E[||Rx||^2] = ||x||^2
-            rp = torch.randn(self.kv_proj_dim, self.head_dim) / (self.kv_proj_dim ** 0.5)
+            # Orthogonal projection: first kv_proj_dim rows of a random orthogonal matrix.
+            # R^T R is the identity on the projected subspace, minimizing dot-product error.
+            full_orth = torch.linalg.qr(torch.randn(self.head_dim, self.head_dim))[0]
+            rp = full_orth[:self.kv_proj_dim, :]  # [kv_proj_dim, head_dim]
             self.register_buffer("rp", rp, persistent=False)
 
     def _jl_project(self, x: torch.Tensor) -> torch.Tensor:
