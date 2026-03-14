@@ -249,7 +249,8 @@ def init_engine(config: dict):
     kv_proj_dim = config.get("kv_proj_dim", 0)
     if kv_proj_dim > 0:
         model_config.kv_proj_dim = kv_proj_dim
-        print(f"JL random projection enabled: kv_proj_dim={kv_proj_dim} (head_dim={model_config.head_dim})")
+        model_config.kv_proj_seed = config.get("kv_proj_seed", 42)
+        print(f"JL random projection enabled: kv_proj_dim={kv_proj_dim} (head_dim={model_config.head_dim}, seed={model_config.kv_proj_seed})")
     model = Model(model_config)
     load_weights(model, model_path, device=device, dtype=dtype)
     model = model.to(device=device, dtype=dtype).eval()

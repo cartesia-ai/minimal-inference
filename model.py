@@ -49,6 +49,7 @@ class ModelConfig:
     tie_word_embeddings: bool = True
     attn_bias: bool = True  # Qwen uses bias, Mistral doesn't
     kv_proj_dim: int = 0  # JL random projection dim for KV cache (0 = disabled)
+    kv_proj_seed: int = 42  # seed for random projection matrix
 
     @classmethod
     def from_pretrained(cls, model_path: str) -> "ModelConfig":
@@ -155,8 +156,7 @@ class Attention(nn.Module):
         if self.kv_proj_dim > 0:
             # Orthogonal projection: first kv_proj_dim rows of a random orthogonal matrix.
             # R^T R is the identity on the projected subspace, minimizing dot-product error.
-            # Fixed seed for reproducibility across restarts.
-            rng = torch.Generator().manual_seed(42)
+            rng = torch.Generator().manual_seed(config.kv_proj_seed)
             full_orth = torch.linalg.qr(torch.randn(self.head_dim, self.head_dim, generator=rng))[0]
             rp = full_orth[:self.kv_proj_dim, :]  # [kv_proj_dim, head_dim]
             self.register_buffer("rp", rp, persistent=False)

@@ -7,6 +7,7 @@ server:
   port: 8000
 
 kv_proj_dim: 0  # JL random projection dim (0 = disabled, e.g. 96 for compression)
+kv_proj_seed: 42  # seed for reproducible projection matrix
 
 scheduler:
   max_seq_len: 4096
