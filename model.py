@@ -150,17 +150,43 @@ class Attention(nn.Module):
             self.num_heads * self.head_dim, config.hidden_size, bias=False
         )
 
-        # JL projection for KV cache compression
+        # KV cache compression via low-rank projection
         self.kv_proj_dim = config.kv_proj_dim
-        if self.kv_proj_dim > 0:
-            # Orthogonal projection: first kv_proj_dim rows of a random orthogonal matrix.
-            # R^T R is the identity on the projected subspace, minimizing dot-product error.
-            full_orth = torch.linalg.qr(torch.randn(self.head_dim, self.head_dim))[0]
-            rp = full_orth[:self.kv_proj_dim, :]  # [kv_proj_dim, head_dim]
-            self.register_buffer("rp", rp, persistent=False)
+        # rp buffer is initialized after weight loading via init_kv_projection()
 
-    def _jl_project(self, x: torch.Tensor) -> torch.Tensor:
-        """Project x [..., head_dim] -> [..., kv_proj_dim] via random projection."""
+    def init_kv_projection(self) -> None:
+        """Derive optimal projection from loaded K weights via SVD.
+
+        Uses the SVD of each KV head's k_proj weight to find the head_dim
+        directions that carry the most variance. The top kv_proj_dim left
+        singular vectors form the projection matrix — this is the optimal
+        rank-kv_proj_dim approximation of K in the Frobenius norm sense.
+
+        Must be called after load_weights().
+        """
+        if self.kv_proj_dim <= 0:
+            return
+        # k_proj.weight: [kv_heads * head_dim, hidden_size]
+        W = self.k_proj.weight.data.float()
+        W_heads = W.view(self.num_kv_heads, self.head_dim, -1)  # [kv_heads, head_dim, hidden]
+
+        # SVD per head: U columns are the principal directions in head_dim space
+        # Average across heads to get a single shared projection
+        U_sum = torch.zeros(self.head_dim, self.head_dim)
+        for h in range(self.num_kv_heads):
+            U, S, _ = torch.linalg.svd(W_heads[h], full_matrices=True)  # U: [head_dim, head_dim]
+            # Weight by singular values: directions with larger S are more important
+            U_sum += U @ torch.diag(S[:self.head_dim].pow(2)) @ U.T
+
+        # Eigen-decomposition of the weighted sum to find top directions
+        eigenvalues, eigenvectors = torch.linalg.eigh(U_sum)
+        # eigh returns ascending order; take the last kv_proj_dim (largest)
+        rp = eigenvectors[:, -self.kv_proj_dim:].T  # [kv_proj_dim, head_dim]
+        rp = rp.to(dtype=self.k_proj.weight.dtype, device=self.k_proj.weight.device)
+        self.register_buffer("rp", rp, persistent=False)
+
+    def _kv_project(self, x: torch.Tensor) -> torch.Tensor:
+        """Project x [..., head_dim] -> [..., kv_proj_dim]."""
         return x @ self.rp.T
 
     def forward(
@@ -279,7 +305,7 @@ class Attention(nn.Module):
         """PyTorch SDPA path (CPU/fallback with padded KV cache)."""
         # JL: project K before caching (Q projected later, V stays full dim)
         if self.kv_proj_dim > 0:
-            k = self._jl_project(k)  # [bsz, kv_heads, seq_len, head_dim] -> [..., kv_proj_dim]
+            k = self._kv_project(k)  # [bsz, kv_heads, seq_len, head_dim] -> [..., kv_proj_dim]
 
         # KV cache update
         if kv_cache is not None:
@@ -303,7 +329,7 @@ class Attention(nn.Module):
 
         # JL: project Q to match projected K dimension
         if self.kv_proj_dim > 0:
-            q = self._jl_project(q)  # [bsz, num_heads, seq_len, head_dim] -> [..., kv_proj_dim]
+            q = self._kv_project(q)  # [bsz, num_heads, seq_len, head_dim] -> [..., kv_proj_dim]
 
         # GQA: expand KV heads to match Q heads
         k = k.repeat_interleave(self.num_groups, dim=1)
@@ -494,3 +520,9 @@ def load_weights(
     if unexpected:
         print(f"Warning: unexpected keys: {unexpected}")
     print(f"Loaded {len(cleaned)} tensors from {len(files)} file(s)")
+
+    # Initialize KV projection matrices from loaded weights (SVD-based)
+    if model.config.kv_proj_dim > 0:
+        for layer in model.layers:
+            layer.self_attn.init_kv_projection()
+        print(f"Initialized SVD-based KV projections: kv_proj_dim={model.config.kv_proj_dim}")
